@@ -78,6 +78,21 @@ impl MemorySet {
             PTEFlags::R | PTEFlags::X,
         );
     }
+    /// 在内存集中清空映射区域
+    pub fn remove_framed_area(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        // 遍历所有映射区域
+        let mut index = 0;
+        while index < self.areas.len() {
+            let area = &mut self.areas[index];
+            if area.vpn_range.get_start() == start_va.floor() && area.vpn_range.get_end() == end_va.ceil() {
+                area.unmap(&mut self.page_table); // 解除映射
+                self.areas.remove(index); // 移除映射区域
+                return 0;
+            }
+            index += 1;
+        }
+        return -1;
+    }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
@@ -262,6 +277,17 @@ impl MemorySet {
             false
         }
     }
+
+    /// 检测新的映射区域是否与已有的映射区域冲突
+    pub fn check_conflict(&self, start: VirtAddr, end: VirtAddr) -> bool {
+        // any: 如果任意一个元素满足条件，则返回true
+        self.areas.iter().any(|area| {
+            let area_start = area.vpn_range.get_start();
+            let area_end = area.vpn_range.get_end();
+            (start.floor() >= area_start && start.floor() < area_end) || (end.ceil() > area_start && end.ceil() <= area_end)
+        })
+    }
+
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {

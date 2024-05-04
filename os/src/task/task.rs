@@ -5,7 +5,7 @@ use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
 use crate::trap::{trap_handler, TrapContext};
-
+pub use crate::syscall::TaskInfo;
 /// The task control block (TCB) of a task.
 pub struct TaskControlBlock {
     /// Save task context
@@ -28,6 +28,9 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+
+    /// record task status
+    pub task_info: TaskInfo,
 }
 
 impl TaskControlBlock {
@@ -39,6 +42,19 @@ impl TaskControlBlock {
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
     }
+
+
+    /// 添加一个逻辑段到应用地址空间
+    pub fn add_maparea(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
+        self.memory_set.insert_framed_area(start_va, end_va, permission);
+    }
+
+    /// 删除应用地址空间的一个逻辑段
+    pub fn remove_maparea(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        self.memory_set.remove_framed_area(start_va, end_va)
+    }
+
+
     /// Based on the elf info in program, build the contents of task in a new address space
     pub fn new(elf_data: &[u8], app_id: usize) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -63,6 +79,7 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            task_info: TaskInfo::new()
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();
